@@ -7,7 +7,6 @@ require 'date'
 require 'time'
 require 'drb/drb'
 URI="druby://localhost:8989"
-#require 'breakpoint'
 
 RECORD = "cat"
 DVR = "/dev/dvb/adapter0/dvr0"
@@ -17,11 +16,12 @@ class Recording
 	RECORDING = 0
 	IDLE = 1
 	CRASHED = 2	  
-	
+	include DRb::DRbUndumped
 	def initialize( channel = "test" )
 		@channel = channel
 		@status = 1
 		@crashcount = 0
+		@catpid = 0
 	end
 
 	def record (dvr, file)
@@ -32,13 +32,17 @@ class Recording
 			cmdstr = "cat #{@recordingdevice} 1> #{@recordingfile} 2> /tmp/cat.error"
 			exec cmdstr
 		}
+		@catpid = `ps auxww |grep #{@recordingdevice}`
+		
 	end
 	
 	def stop
-		if @status == RECORDING then Process.kill(15,@child) 
-		else
-			Process.wait(@child)
-		end
+		#if @status == RECORDING then 
+		Process.kill(15,@child) 
+		#else
+		Process.wait(@child)
+		#end
+		`killall cat`
 		@status = IDLE unless @status == CRASHED
         end
 

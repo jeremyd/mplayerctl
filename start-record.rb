@@ -1,3 +1,4 @@
+#!/usr/bin/ruby
 require 'drb/drb'
 
 DVR = "/dev/dvb/adapter0/dvr0"
