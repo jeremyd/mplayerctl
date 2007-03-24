@@ -6,7 +6,7 @@ DRb.start_service
 
 if ARGV[0]
   name = ARGV[0]
-  recording = DRbObject.new_with_uri(SERVER_URI)  
+  recording = DRbObject.new_with_uri(SERVER_URI) 
   recording.record(DVR,"#{name}.mkv")
 end
 

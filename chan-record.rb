@@ -5,6 +5,8 @@
 
 require 'date'
 require 'time'
+require 'drb/drb'
+URI="druby://localhost:8989"
 #require 'breakpoint'
 
 RECORD = "cat"
@@ -73,31 +75,14 @@ class Recording
 		end
 	end
 	
-	def schedule( startdatetime, stopdatetime, dvr, file = 'default.mkv' )
-		@startdt = DateTime.parse(startdatetime)
-		@stopdt = DateTime.parse(stopdatetime)
-		while @status == IDLE
-			sleep 1
-			if( DateTime.now < @startdt )
-				record(dvr,file)
-			end
-		end
-		while @status == RECORDING
-			sleep 1
-			if DateTime.now < @stopdt
-				stop
-			end
-		end
-		return true
-	end
-		
-				
-			
-			
-	
 end
 
+recordingcontrol = Recording::new
+FRONT_OBJECT = recordingcontrol
+DRb.start_service(URI, FRONT_OBJECT)
+DRb.thread.join
 
+=begin
 if ARGV[0]
   name = ARGV[0]
   vcr = Recording::new(name)
@@ -106,3 +91,4 @@ if ARGV[0]
 	sleep 1
   end
 end
+=end
