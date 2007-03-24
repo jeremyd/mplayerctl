@@ -304,6 +304,7 @@ class MPlayer
 			return true
 		end
 	end
+
 end
 
 mplayerpersistant = MPlayer.new
@@ -311,6 +312,7 @@ FRONT_OBJECT = mplayerpersistant
 DRb.start_service(URI, FRONT_OBJECT)
 DRb.thread.join
 
+=begin 
 if ARGV[0]
   if ARGV[0] == "--help" then
     print "Usage: mplayer-ctl-hdtv.rb <file1> <file2> ..\n"
@@ -332,3 +334,4 @@ if ARGV[0]
 else
 	puts "Usage: mplayer-ctl-hdtv.rb <file1> <file2> ..\n"
 end
+=end
