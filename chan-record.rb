@@ -28,15 +28,19 @@ class Recording
     puts @azapconfig
   end
   
-  def add_action(action, time)
-    @actions.push :action => action, :time => Time.parse(time)
-    puts "#{action} scheduled for #{Time.parse(time)}"
+  def add_action(action, datetime)
+    @actions.push :action => action, :time => datetime
+    puts "#{action} scheduled for #{datetime}"
   end
   
   def action_watchdog
-    set_time = Time.now
     @actions.each do |a|
-      if set_time > a[:time]
+      datestr, timestr = a[:time].split(/[@]/)
+      set_time = Time.parse(timestr)
+      set_date = Date.parse(datestr)
+      now_time = Time.now
+      now_date = Date.today
+      if set_date == now_date && set_time <= now_time
         to_run = a[:action]
         puts "running action: #{to_run}"
         eval(to_run)
@@ -44,7 +48,12 @@ class Recording
     end
   ensure
     @actions.reject! do |r|
-      set_time > r[:time]
+      datestr, timestr = r[:time].split(/[@]/)
+      set_time = Time.parse(timestr)
+      set_date = Date.parse(datestr)
+      now_time = Time.now
+      now_date = Date.today
+      set_date == now_date && set_time <= now_time
     end
   end
   
@@ -68,6 +77,7 @@ class Recording
   end
 
   def record(file)
+    stop if @status == RECORDING
     @basename = file.dup
     @basename.gsub!(/-[0-9]+?-recovery/,"")
     @basename.gsub!(/#{File.extname(file)}/,"")
@@ -82,6 +92,13 @@ class Recording
       exec 'cat'
     }
     Thread.new { wait_and_resume }
+    Thread.new { 
+      while(1) do
+        sleep(1)
+        break if !is_recording?
+      end
+      puts "WARNING: recording is not happening"
+      }
   end
   
   def wait_and_resume
@@ -111,6 +128,14 @@ class Recording
     end
   end
   
+  def is_recording?
+    @test_size = File.size(@recordingfile)
+    sleep(1)
+    @new_size = File.size(@recordingfile)
+    return false if @new_size == @test_size
+    return true
+  end
+  
   def quit
     stop
     @status = Recording::QUIT
@@ -126,16 +151,3 @@ recordingcontrol = Recording::new
 FRONT_OBJECT = recordingcontrol
 DRb.start_service(URI, FRONT_OBJECT)
 DRb.thread.join
-
-=begin
-if ARGV[0]
-  name = ARGV[0]
-  recordingcontrol.record(DVR,"#{name}.mkv")
-end
-
-while(1) do
-  sleep(1)
-  break if recordingcontrol.get_status == Recording::QUIT
-end
-exit(0)
-=end
