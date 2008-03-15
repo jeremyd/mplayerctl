@@ -33,13 +33,15 @@
 require 'kconv'
 require 'socket'
 require 'drb/drb'
-URI="druby://localhost:8787"
-#require 'fileutils'
+URI = "druby://localhost:6767"
 
-$MPLAYER = "/usr/local/bin/mplayer"
+$MPLAYER = "/home/jeremy/xwinwrap/xwinwrap -ni -o 0.9 -fs -s -st -sp -b -nf -- /usr/local/mplayer/bin/mplayer"
+#$MPLAYER = "/usr/local/mplayer/bin/mplayer"
 
-$MPLAYER_OPTS = "-cache 7000 -vo xvmc -vc ffmpeg12mc -aspect 4:3"
-#$MPLAYER_OPTS = "-cache 7000 -vo xv -aspect 4:3"
+#$MPLAYER_OPTS = "-cache 7000 -vo xvmc -vc ffmpeg12mc -aspect 4:3"
+#$MPLAYER_OPTS = "-cache 7000 -quiet -slave -vo xvmc -vc ffmpeg12mc"
+#$MPLAYER_OPTS = "-cache 7000 -quiet -slave"
+$MPLAYER_OPTS = "-wid WID -quiet -cache 7000 -slave"
 
 class MPlayer
 
@@ -52,14 +54,9 @@ class MPlayer
 	RECOVERY = 6
 
 	def initialize( addopts = "")
-
 		@mplayerpath = $MPLAYER
 		@status = MPlayer::INACTIVE
-		@playlist = Array::new()
-		@playlistfile = ''
-
 		@addopts = addopts
-		@playfile = ''
 		@type = 'unknown'
 		@bitrate = 'unknown'
 		@title = 'unknown'
@@ -68,32 +65,28 @@ class MPlayer
 		@channel = 'unknown'
 		@curfilesize = 0
 		@livedelay = 5
-		@resumearg = ''
 		@crashcount = 1
-		
 	end
 
-	def load_playlist( playlist, basename )
+	def load(video)
 		stop if @status == PLAY || @status == PAUSED
-		@playlist = playlist
+		@playlistfile = video
 		@status = MPlayer::READY
-		@playlistfile = @playlist.join(" ")
 		@mplayeropts = "-quiet -slave " + @addopts + " " + $MPLAYER_OPTS
-		@playfile = playlist[0]
-		@basename=basename
+		if video =~ /-([0-9]+?)-recovery/
+                  @crashcount = $1.to_i
+                  @basename = video.gsub(/-[0-9]+?-recovery#{File.extname(@playlistfile)}/,"")
+		else               
+                  @basename = video.gsub(/#{File.extname(@playlistfile)}/,"")
+                end
 	end
 
 	def resumelive
-			@status = LIVE
-			@curfilesize = File.size(@playfile)
-			sleep(@livedelay)
-			play
-	end
-	
-	def resume( resumearg)
-			@status = RESUME
-			@resumearg = resumearg
-			play
+                puts "resuming Live TV"
+		@status = LIVE
+		@curfilesize = File.size(@playlistfile)
+		sleep(@livedelay)
+		play
 	end
 
 	def play
@@ -118,15 +111,12 @@ class MPlayer
 				case @status
 				when LIVE
 					cmdstr = "#{@mplayerpath} #{@mplayeropts} -sb #{@curfilesize} #{@playlistfile}"
-				when RESUME
-					cmdstr = "#{@mplayerpath} #{@mplayeropts} -ss #{@resumearg} #{@playlistfile}"
 				when RECOVERY
-					cmdstr = "#{@mplayerpath} #{@mplayeropts} #{@playfile}"
+					cmdstr = "#{@mplayerpath} #{@mplayeropts} #{@playlistfile}"
 				else
 					cmdstr = "#{@mplayerpath} #{@mplayeropts} #{@playlistfile}"
 				end
 				exec cmdstr
-
 			}
 
 			send.close
@@ -222,69 +212,64 @@ class MPlayer
 		stop_inspector
 		@polling_thread = Thread::start{
 			while true
-				critial = true
 				@lastmsg = @receive.readline
 				@lastmsg.chop!
-				#print @lastmsg
-				#print "\n"
 				case @lastmsg
-				when /^Playing (.+)/
-					@playfile = $1
-					@playfile.gsub!(/\.$/,'')
-					@type = 'unknown'
-					@bitrate = 'unknown'
-					@title = 'unknown'
-					@artist = 'unknown'
-					@album = 'unknown'
-					@channel = 'unknown'
-					#print "file: #{@playfile}\n"
-				when /^ Title: (.+)/
-					@title = $1.toeuc
-					#print "title: #{@title}\n"
-				when /^ Artist: (.+)/
-					@artist = $1.toeuc
-					#print "artist: #{@artist}\n"
-				when /^ Album: (.+)/
-					@album = $1.toeuc
-					#print "album: #{@album}\n"
-				when /^Selected audio codec: \[(.+?)\] (.+)$/
-					@type = $1
-					#print "type: #{@type}\n"
-				when /^AUDIO: (\d+) Hz, (\d) ch,(.+)\((.*?) kbit\)$/
-					@channel = $2
-					@bitrate = $4
-					#print "channel: #{@channel}, bitrate: #{@bitrate}\n"
-				when /^Exiting\.\.\. \(End of file\)/
-					print "Mplayer Thread Exited. EOF\n"
-					if is_currently_recording 
-						@status = MPlayer::LIVE
-					elsif File.exists?("#{@basename}-#{@crashcount}-recovery.mkv")
-						@status = MPlayer::RECOVERY
-					else
+					when /^Playing (.+)/
+						@playfile = $1
+						@playfile.gsub!(/\.$/,'')
+						@type = 'unknown'
+						@bitrate = 'unknown'
+						@title = 'unknown'
+						@artist = 'unknown'
+						@album = 'unknown'
+						@channel = 'unknown'
+						#print "file: #{@playfile}\n"
+					when /^ Title: (.+)/
+						@title = $1.toeuc
+						#print "title: #{@title}\n"
+					when /^ Artist: (.+)/
+						@artist = $1.toeuc
+						#print "artist: #{@artist}\n"
+					when /^ Album: (.+)/
+						@album = $1.toeuc
+						#print "album: #{@album}\n"
+					when /^Selected audio codec: \[(.+?)\] (.+)$/
+						@type = $1
+						#print "type: #{@type}\n"
+					when /^AUDIO: (\d+) Hz, (\d) ch,(.+)\((.*?) kbit\)$/
+						@channel = $2
+						@bitrate = $4
+						#print "channel: #{@channel}, bitrate: #{@bitrate}\n"
+					when /^Exiting\.\.\. \(End of file\)/
+						print "Mplayer Thread Exited. EOF\n"
+                                        
+						if is_currently_recording 
+							@status = MPlayer::LIVE
+						elsif File.exists?("#{@basename}-#{@crashcount}-recovery.mkv")
+							@status = MPlayer::RECOVERY
+						else
+							@status = MPlayer::READY
+						end
+						stop_inspector
+						@send.close
+						@receive.close
+					when /^Exiting\.\.\./
+						print "Mplayer Thread Exited.\n"
 						@status = MPlayer::READY
-					end
-					stop_inspector
-					@send.close
-					@receive.close
-				when /^Exiting\.\.\./
-					print "Mplayer Thread Exited.\n"
-					@status = MPlayer::READY
-					stop_inspector
-					@send.close
-					@receive.close
-				else
-					print "printing a mis-understood msg::"
-					print @lastmsg,"\n"
-				end 
-				critical = false
-			end
+						stop_inspector
+						@send.close
+						@receive.close
+				end
+				print ">>#{@lastmsg}\n"
+			end 
 		}
 	end
 	
 	def recover
 		if @status == MPlayer::RECOVERY
 			puts "recovering from crash.. #{@basename}-#{@crashcount}-recovery.mkv\n\n"
-			@playfile = "#{@basename}-#{@crashcount}-recovery.mkv"
+			@playlistfile = "#{@basename}-#{@crashcount}-recovery.mkv"
 			@crashcount = @crashcount +1
 			play
 		end
@@ -295,43 +280,34 @@ class MPlayer
 	end
 
 	def is_currently_recording
-		@test_size = File.size(@playfile)
+		@test_size = File.size(@playlistfile)
 		sleep(1)
-		@new_size = File.size(@playfile)
+		@new_size = File.size(@playlistfile)
 		if @new_size == @test_size
 			return false
 		else
 			return true
 		end
 	end
-
 end
 
-mplayerpersistant = MPlayer.new
-FRONT_OBJECT = mplayerpersistant
-DRb.start_service(URI, FRONT_OBJECT)
-DRb.thread.join
 
-=begin 
 if ARGV[0]
   if ARGV[0] == "--help" then
-    print "Usage: mplayer-ctl-hdtv.rb <file1> <file2> ..\n"
+    print "Usage: mplayer-ctl-hdtv.rb <startfile> ..\n"
     exit(0)
   end
-  startfile = ARGV[0]
-  playlist = ARGV
-  x = MPlayer::new()
-  basename = startfile.dup
-  basename.gsub!(/#{File.extname(basename)}/,"")
-  x.load_playlist(playlist,basename)
-  x.play
+	mplayerpersistant = MPlayer.new
+	FRONT_OBJECT = mplayerpersistant
+  mplayerpersistant.load(ARGV[0])
+  mplayerpersistant.play
+	DRb.start_service(URI, FRONT_OBJECT)
   while @status != MPlayer::READY
-    @status = x.get_status
+    @status = mplayerpersistant.get_status
     sleep 1
-    x.resumelive if @status == MPlayer::LIVE
-    x.recover if @status == MPlayer::RECOVERY
+    mplayerpersistant.resumelive if @status == MPlayer::LIVE
+    mplayerpersistant.recover if @status == MPlayer::RECOVERY
   end
 else
-	puts "Usage: mplayer-ctl-hdtv.rb <file1> <file2> ..\n"
+	puts "Usage: mplayer-ctl-hdtv.rb <file1>..\n"
 end
-=end
