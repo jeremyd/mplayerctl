@@ -1,8 +1,6 @@
 #!/usr/bin/env ruby
 require 'rubygems'
 require 'drb/drb'
-require 'date'
-require 'time'
 require 'chronic'
 require 'ruby-debug'
 
@@ -24,8 +22,7 @@ class Recording
     @azapcmd = azapcmd
     @status = IDLE
     @crashcount = 0
-    @actions = []
-    puts @azapconfig
+    @actions = [] 
   end
   
   def add_action(action, chronictime)
@@ -60,6 +57,8 @@ class Recording
   end
   
   def tune(chan)
+    @totalcount = -1
+    @scancount = 0
     puts "tuning to #{chan}"
     if @status == RECORDING
       stop
@@ -68,13 +67,19 @@ class Recording
     Process.kill(15,@tune) unless @tune.nil?
     sleep(1)
   ensure
+    @get,@send = IO.pipe
     @tune = Process.fork {
-      STDOUT.close
+      @get.close
+      STDOUT.reopen(@send)
+      STDERR.reopen(@send)
+      #STDOUT.close
       STDIN.close
       #STDERR.close
       exec @azapcmd, '-r', chan
     }
+    @send.close
     Process.detach(@tune)
+    
     sleep(1)
     resume if @status == RETUNE 
   end
@@ -103,18 +108,21 @@ class Recording
         STDOUT.puts "Recording process encountered an error => #{e}"
       end
     }
+    Process.detach(@child)
     Thread.new { wait_and_resume }
-    Process.fork { 
+    @warning = Process.fork { 
       while(1) do
         sleep(5)
         break if !is_recording?
       end
       puts "WARNING: recording to #{@recordingfile} is not happening"
-      }
+    }
+    Process.detach(@warning)
   end
   
   def wait_and_resume
     Process.wait2(@child)
+    Process.kill(15,@warning)
     unless @status == IDLE
       @status = CRASHED
       resume
@@ -123,13 +131,19 @@ class Recording
 
   def stop
     @status = IDLE
+    #Process.kill(15,@warning)
     Process.kill(15, @child)
-    Process.wait2(@child)
   rescue
     puts "the process was gone"
   end
 
   def get_status
+    output = @get.readpartial(200000)
+    scan = output.scan(/status 00/)
+    @totalcount = @totalcount + output.to_a.size
+    @scancount = @scancount + output.to_a.size - scan.to_a.size
+    signal_strength = @scancount.to_f / @totalcount.to_f 
+    STDOUT.puts "Signal strength: #{signal_strength}: #{@totalcount}, #{@scancount}"
     return @status
   end
  

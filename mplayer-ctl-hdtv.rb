@@ -51,8 +51,8 @@ class MPlayer
 	RESUME    = 5
 	RECOVERY = 6
 
-	def initialize( addopts = "")
-		@mplayerpath = $MPLAYER
+	def initialize(mplayercmd, addopts = "")
+		@mplayerpath = mplayercmd
 		@status = MPlayer::INACTIVE
 		@addopts = addopts
 		@type = 'unknown'
@@ -69,13 +69,14 @@ class MPlayer
 	def load(video)
 		stop if @status == PLAY || @status == PAUSED
 		@playlistfile = video
+                @extname = File.extname(@playlistfile)
 		@status = MPlayer::READY
-		@mplayeropts = "-quiet -slave " + @addopts + " " + $MPLAYER_OPTS
+		@mplayeropts = "-quiet -slave " + @addopts
 		if video =~ /-([0-9]+?)-recovery/
                   @crashcount = $1.to_i
-                  @basename = video.gsub(/-[0-9]+?-recovery#{File.extname(@playlistfile)}/,"")
+                  @basename = video.gsub(/-[0-9]+?-recovery#{@extname}/,"")
 		else               
-                  @basename = video.gsub(/#{File.extname(@playlistfile)}/,"")
+                  @basename = video.gsub(/#{@extname}/,"")
                 end
 	end
 
@@ -244,7 +245,7 @@ class MPlayer
                                         
 						if is_currently_recording 
 							@status = MPlayer::LIVE
-						elsif File.exists?("#{@basename}-#{@crashcount}-recovery.mkv")
+						elsif File.exists?("#{@basename}-#{@crashcount}-recovery#{@extname}")
 							@status = MPlayer::RECOVERY
 						else
 							@status = MPlayer::READY
@@ -266,8 +267,8 @@ class MPlayer
 	
 	def recover
 		if @status == MPlayer::RECOVERY
-			puts "recovering from crash.. #{@basename}-#{@crashcount}-recovery.mkv\n\n"
-			@playlistfile = "#{@basename}-#{@crashcount}-recovery.mkv"
+			puts "recovering from crash.. #{@basename}-#{@crashcount}-recovery#{@extname}\n\n"
+			@playlistfile = "#{@basename}-#{@crashcount}-recovery#{@extname}"
 			@crashcount = @crashcount +1
 			play
 		end
@@ -291,10 +292,10 @@ end
 
 if ARGV[0]
   if ARGV[0] == "--help" then
-    print "Usage: mplayer-ctl-hdtv.rb <startfile> ..\n"
+    print "ONE arg, Usage: mplayer-ctl-hdtv.rb <startfile>\n"
     exit(0)
   end
-  x = MPlayer::new()
+  x = MPlayer::new($MPLAYER,$MPLAYER_OPTS)
   x.load(ARGV[0])
   x.play
   while @status != MPlayer::READY

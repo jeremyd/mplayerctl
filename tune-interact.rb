@@ -1,7 +1,5 @@
 #!/usr/bin/ruby
 require 'drb/drb'
-require 'rubygems'
-require 'ruby-debug'
 
 def azap_config_interactive(conf)    
   conf.each_with_index do |a,i|
