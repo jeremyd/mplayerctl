@@ -14,7 +14,7 @@ class Recording
   CRASHED = 2	
   QUIT = 3
   RETUNE = 4  
-  
+  attr_accessor :azapconfig
   def initialize(dvr = nil, azapconfig = nil, azapcmd = nil)
     dvr ||= "/dev/dvb/adapter0/dvr0"
     @recordingdevice = dvr
@@ -33,11 +33,17 @@ class Recording
     puts "#{action} scheduled for #{Chronic.parse(chronictime)}"
   end
   
+  def are_we_there_yet?(cronstr)
+    set_time = Chronic.parse(cronstr)
+    now_time = Time.now
+    return true if set_time <= now_time
+    return false
+  end
+  
   def action_watchdog
+    set_time = a[:chronictime]
     @actions.each do |a|
-      set_time = Chronic.parse(a[:chronictime])
-      now_time = Time.now
-      if set_time <= now_time
+      if are_we_there_yet?(set_time)
         to_run = a[:action]
         puts "running action: #{to_run}"
         eval(to_run)
@@ -45,12 +51,7 @@ class Recording
     end
   ensure
     @actions.reject! do |r|
-      datestr, timestr = r[:time].split(/[@]/)
-      set_time = Time.parse(timestr)
-      set_date = Date.parse(datestr)
-      now_time = Time.now
-      now_date = Date.today
-      set_date == now_date && set_time <= now_time
+      are_we_there_yet?(set_time)
     end
     if @status == RECORDING
       puts 'warning: process reported recording was not happening' unless 
@@ -59,6 +60,7 @@ class Recording
   end
   
   def tune(chan)
+    puts "tuning to #{chan}"
     if @status == RECORDING
       stop
       @status = RETUNE
@@ -134,7 +136,7 @@ class Recording
   def resume
     if @status == CRASHED || @status == RETUNE
       @crashcount = @crashcount + 1
-      record("#{@basename}-#{@crashcount}-recovery.#{@extname}")
+      record("#{@basename}-#{@crashcount}-recovery#{@extname}")
     end
   end
   
