@@ -3,6 +3,7 @@ require 'rubygems'
 require 'drb/drb'
 require 'date'
 require 'time'
+require 'chronic'
 require 'ruby-debug'
 
 URI="druby://localhost:8989"
@@ -12,8 +13,7 @@ class Recording
   IDLE = 1
   CRASHED = 2	
   QUIT = 3
-  RETUNE = 4
- # include DRb::DRbUndumped  
+  RETUNE = 4  
   
   def initialize(dvr = nil, azapconfig = nil, azapcmd = nil)
     dvr ||= "/dev/dvb/adapter0/dvr0"
@@ -28,19 +28,16 @@ class Recording
     puts @azapconfig
   end
   
-  def add_action(action, datetime)
-    @actions.push :action => action, :time => datetime
-    puts "#{action} scheduled for #{datetime}"
+  def add_action(action, chronictime)
+    @actions.push :action => action, :chronictime => chronictime
+    puts "#{action} scheduled for #{Chronic.parse(chronictime)}"
   end
   
   def action_watchdog
     @actions.each do |a|
-      datestr, timestr = a[:time].split(/[@]/)
-      set_time = Time.parse(timestr)
-      set_date = Date.parse(datestr)
+      set_time = Chronic.parse(a[:chronictime])
       now_time = Time.now
-      now_date = Date.today
-      if set_date == now_date && set_time <= now_time
+      if set_time <= now_time
         to_run = a[:action]
         puts "running action: #{to_run}"
         eval(to_run)
@@ -55,6 +52,10 @@ class Recording
       now_date = Date.today
       set_date == now_date && set_time <= now_time
     end
+    if @status == RECORDING
+      puts 'warning: process reported recording was not happening' unless 
+        is_recording?
+    end
   end
   
   def tune(chan)
@@ -63,6 +64,7 @@ class Recording
       @status = RETUNE
     end
     Process.kill(15,@tune) unless @tune.nil?
+    sleep(1)
   ensure
     @tune = Process.fork {
       STDOUT.close
@@ -72,7 +74,6 @@ class Recording
     }
     Process.detach(@tune)
     sleep(1)
-    
     resume if @status == RETUNE 
   end
 
@@ -85,19 +86,27 @@ class Recording
     @recordingfile = file
     puts "now recording to: #{@recordingfile}"
     @status = RECORDING
+    
     @child = Process.fork {
-      STDOUT.reopen(@recordingfile)
-      STDIN.reopen(@recordingdevice)
-      STDERR.reopen('/tmp/cat.error',"a")
-      exec 'cat'
+      begin
+      File.open(@recordingfile,"w") do |recordfile|
+        File.open(@recordingdevice,"r") do |dev|
+          while 1
+            recordfile.write dev.readpartial(2000000)
+          end
+        end
+      end
+      rescue => e
+        STDOUT.puts "Recording process encountered an error => #{e}"
+      end
     }
     Thread.new { wait_and_resume }
-    Thread.new { 
+    Process.fork { 
       while(1) do
-        sleep(1)
+        sleep(5)
         break if !is_recording?
       end
-      puts "WARNING: recording is not happening"
+      puts "WARNING: recording to #{@recordingfile} is not happening"
       }
   end
   
@@ -129,10 +138,10 @@ class Recording
   end
   
   def is_recording?
-    @test_size = File.size(@recordingfile)
-    sleep(1)
-    @new_size = File.size(@recordingfile)
-    return false if @new_size == @test_size
+    test_size = File.size(@recordingfile)
+    sleep(5)
+    new_size = File.size(@recordingfile)
+    return false if new_size == test_size
     return true
   end
   
