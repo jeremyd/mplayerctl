@@ -288,7 +288,7 @@ OptionParser.new do |opts|
     mplay = options[:mplayer].dup
     xwinwrap = x
     options[:mplayer] = "#{xwinwrap} -ni -o 0.9 -fs -s -st -sp -b -nf -- #{mplay}"
-    options[:mplayer_opts] = "-wid WID -cache 7000 -slave -fs"
+    options[:mplayer_opts] = "-wid WID -cache 7000 -slave"
   end
   opts.on("--f", "filename", "=PATH") do |f|
     options[:filename] = f
