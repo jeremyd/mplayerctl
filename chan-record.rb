@@ -79,9 +79,10 @@ class Recording
 
   def record(file)
     stop if @status == RECORDING
+    @extname = File.extname(file)
     @basename = file.dup
     @basename.gsub!(/-[0-9]+?-recovery/,"")
-    @basename.gsub!(/#{File.extname(file)}/,"")
+    @basename.gsub!(/#{@extname}/,"")
     @recordingdevice
     @recordingfile = file
     puts "now recording to: #{@recordingfile}"
@@ -133,7 +134,7 @@ class Recording
   def resume
     if @status == CRASHED || @status == RETUNE
       @crashcount = @crashcount + 1
-      record("#{@basename}-#{@crashcount}-recovery.mkv")
+      record("#{@basename}-#{@crashcount}-recovery.#{@extname}")
     end
   end
   
