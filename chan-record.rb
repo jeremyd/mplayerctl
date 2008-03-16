@@ -26,21 +26,21 @@ class Recording
   end
   
   def add_action(action, chronictime)
-    @actions.push :action => action, :chronictime => chronictime
+    @actions.push :action => action, :chronictime => Chronic.parse(chronictime)
     puts "#{action} scheduled for #{Chronic.parse(chronictime)}"
   end
   
-  def are_we_there_yet?(cronstr)
-    set_time = Chronic.parse(cronstr)
-    now_time = Time.now
-    return true if set_time <= now_time
+  def are_we_there_yet?(cronobj)
+    now_time = Chronic.parse("now")
+    return true if cronobj <= now_time
     return false
   end
   
   def action_watchdog
-    set_time = a[:chronictime]
+    remove_actions = []
     @actions.each do |a|
-      if are_we_there_yet?(set_time)
+      if are_we_there_yet?(a[:chronictime])
+        remove_actions.push a
         to_run = a[:action]
         puts "running action: #{to_run}"
         eval(to_run)
@@ -48,7 +48,7 @@ class Recording
     end
   ensure
     @actions.reject! do |r|
-      are_we_there_yet?(set_time)
+      remove_actions.include?(r)
     end
     if @status == RECORDING
       puts 'warning: process reported recording was not happening' unless 
