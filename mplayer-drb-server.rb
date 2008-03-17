@@ -65,7 +65,7 @@ class MPlayer
     stop if @status == PLAY || @status == PAUSED
     @playlistfile = video
     @status = MPlayer::READY
-    @mplayeropts = "-slave " + @addopts
+    @mplayeropts = @addopts
     if video =~ /-([0-9]+?)-recovery/
       @crashcount = $1.to_i + 1
       @extname = File.extname(@playlistfile)
