@@ -272,7 +272,7 @@ end
 
 # MAIN
 options = { :mplayer => `which mplayer`.chomp, :mplayer_opts => "-cache 7000 -quiet -fs" }
-USAGE = "Usage: mplayer-ctl-hdtv.rb -f filename [--nvidia] [--xwinwrap path-to-xwinwrap] [--mplayer path-to-mplayer] [--options mplayer_options]\n"
+USAGE = "\n\nUsage: mplayer-ctl-hdtv.rb -f filename [--nvidia] [--xwinwrap path-to-xwinwrap] [--mplayer path-to-mplayer] [--options mplayer_options]\n"
 OptionParser.new do |opts|
   opts.banner = USAGE
   opts.on("-n", "--nvidia") do |nv|
@@ -284,22 +284,26 @@ OptionParser.new do |opts|
   opts.on("-o", "--options", "=OPTIONS") do |o|
     options[:mplayer_opts] = o
   end
-  opts.on("-x", "--xwinwrap", "=PATH") do |x|
-    mplay = options[:mplayer].dup
-    xwinwrap = x
-    options[:mplayer] = "#{xwinwrap} -ni -o 0.9 -fs -s -st -sp -b -nf -- #{mplay}"
-    options[:mplayer_opts] = "-wid WID -cache 7000 -slave"
+  opts.on("-x", "--xwinwrap", "=PATH") do |xwinwrap|
+    options[:xwinwrap] = "#{xwinwrap} -ni -o 0.9 -fs -s -st -sp -b -nf --"
+    options[:xwinwrap_opts] = "-wid WID -cache 7000 -slave -quiet"
   end
-  opts.on("--f", "filename", "=PATH") do |f|
+  opts.on("-f", "--file", "=PATH") do |f|
     options[:filename] = f
   end  
 end.parse!
 
+if options[:xwinwrap]
+  MPLAYER_CMD = "#{options[:xwinwrap]} #{options[:mplayer]}"
+  options[:mplayer_opts] = options[:xwinwrap_opts]
+else
+  MPLAYER_CMD = "#{options[:mplayer]}"
+end
+
 raise USAGE unless options[:filename]
 
-mplayerpersistant = MPlayer.new(options[:mplayer],options[:mplayer_opts])
+mplayerpersistant = MPlayer.new(MPLAYER_CMD, options[:mplayer_opts])
 FRONT_OBJECT = mplayerpersistant
-puts options[:filename]
 mplayerpersistant.load(options[:filename])
 mplayerpersistant.play
 DRb.start_service(URI, FRONT_OBJECT)
