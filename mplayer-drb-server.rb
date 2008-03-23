@@ -66,12 +66,13 @@ class MPlayer
     @playlistfile = video
     @status = MPlayer::READY
     @mplayeropts = @addopts
+    @extname = File.extname(@playlistfile)
     if video =~ /-([0-9]+?)-recovery/
       @crashcount = $1.to_i + 1
-      @extname = File.extname(@playlistfile)
       @basename = video.gsub(/-[0-9]+?-recovery#{File.extname(@playlistfile)}/,"")
     else               
       @basename = video.gsub(/#{@extname}/,"")
+      @crashcount = 1
     end
   end
 
@@ -151,7 +152,6 @@ class MPlayer
 
   def playlist( step)
     if @status == PLAY || @status == PAUSED
-      #@playfile = ''
       str = "pt_step #{step}\n"
       @send.write(str)
       return true
@@ -221,7 +221,7 @@ class MPlayer
           #print "channel: #{@channel}, bitrate: #{@bitrate}\n"
         when /^Exiting\.\.\. \(End of file\)/
           print "Mplayer Thread Exited. EOF\n"
-
+          puts "#{@basename}-#{@crashcount}-recovery#{@extname}"
           if is_currently_recording 
             @status = MPlayer::LIVE
           elsif File.exists?("#{@basename}-#{@crashcount}-recovery#{@extname}")
