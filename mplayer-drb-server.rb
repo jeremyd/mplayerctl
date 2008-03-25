@@ -149,6 +149,13 @@ class MPlayer
       return false
     end
   end
+  
+  # frame_step or slow motion
+  def speed_set(value)
+    if @status == PLAY || @status == PAUSED
+      @send.write("speed_set #{value}\n")
+    end
+  end
 
   def playlist( step)
     if @status == PLAY || @status == PAUSED
@@ -271,12 +278,12 @@ class MPlayer
 end
 
 # MAIN
-options = { :mplayer => `which mplayer`.chomp, :mplayer_opts => "-cache 7000 -quiet -fs" }
+options = { :mplayer => `which mplayer`.chomp, :mplayer_opts => "-cache 7000 -slave -quiet -fs" }
 USAGE = "\n\nUsage: mplayer-ctl-hdtv.rb -f filename [--nvidia] [--xwinwrap path-to-xwinwrap] [--mplayer path-to-mplayer] [--options mplayer_options]\n"
 OptionParser.new do |opts|
   opts.banner = USAGE
   opts.on("-n", "--nvidia") do |nv|
-    options[:mplayer_opts] = "-vo xvmc,xv -vc ffmpeg12mc -cache 7000 -quiet -fs"
+    options[:mplayer_opts] = "-vo xvmc,xv -vc ffmpeg12mc -cache 7000 -slave -quiet -fs"
   end
   opts.on("-m", "--mplayer", "=PATH") do |m|
     options[:mplayer] = m
