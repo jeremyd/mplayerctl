@@ -34,7 +34,7 @@ require 'kconv'
 require 'socket'
 require 'drb/drb'
 require 'optparse'
-URI = "druby://localhost:6767"
+URI = "druby://0.0.0.0:6767"
 
 class MPlayer
 
@@ -155,6 +155,15 @@ class MPlayer
     if @status == PLAY || @status == PAUSED
       @send.write("speed_set #{value}\n")
     end
+  end
+
+  def frame_step
+    @status = PAUSED
+    @send.write("frame_step\n")
+  end
+
+  def volume(vol)
+    @send.write("volume #{vol}\n")
   end
 
   def playlist( step)
@@ -278,12 +287,12 @@ class MPlayer
 end
 
 # MAIN
-options = { :mplayer => `which mplayer`.chomp, :mplayer_opts => "-cache 7000 -slave -quiet -fs" }
-USAGE = "\n\nUsage: mplayer-ctl-hdtv.rb -f filename [--nvidia] [--xwinwrap path-to-xwinwrap] [--mplayer path-to-mplayer] [--options mplayer_options]\n"
+options = { :mplayer => `which mplayer`.chomp, :mplayer_opts => "-cache 30000 -slave -quiet -fs" }
+USAGE = "\n\nUsage: mplayer-ctl-hdtv.rb [-f media file/url] [--xwinwrap path-to-xwinwrap] [--mplayer path-to-mplayer] [--options mplayer_options]\n"
 OptionParser.new do |opts|
   opts.banner = USAGE
-  opts.on("-n", "--nvidia") do |nv|
-    options[:mplayer_opts] = "-vo xvmc,xv -vc ffmpeg12mc -cache 7000 -slave -quiet -fs"
+  opts.on("-a", "--altscreen") do
+    options[:mplayer_opts] += " -geometry +1920+1080"
   end
   opts.on("-m", "--mplayer", "=PATH") do |m|
     options[:mplayer] = m
@@ -307,16 +316,26 @@ else
   MPLAYER_CMD = "#{options[:mplayer]}"
 end
 
-raise USAGE unless options[:filename]
-
 mplayerpersistant = MPlayer.new(MPLAYER_CMD, options[:mplayer_opts])
 FRONT_OBJECT = mplayerpersistant
-mplayerpersistant.load(options[:filename])
-mplayerpersistant.play
-DRb.start_service(URI, FRONT_OBJECT)
-while @status != MPlayer::READY
-  @status = mplayerpersistant.get_status
-  sleep 1
-  mplayerpersistant.resumelive if @status == MPlayer::LIVE
-  mplayerpersistant.recover if @status == MPlayer::RECOVERY
+if options[:filename]
+  mplayerpersistant.load(options[:filename])
+  mplayerpersistant.play
 end
+DRb.start_service(URI, FRONT_OBJECT)
+
+puts "Listening on #{DRb.uri}"
+
+##
+## Example: Simple loop to perform custom actions on status. 
+
+#while @status != MPlayer::READY
+#  @status = mplayerpersistant.get_status
+#  sleep 1
+#  mplayerpersistant.resumelive if @status == MPlayer::LIVE
+#  mplayerpersistant.recover if @status == MPlayer::RECOVERY
+#end
+
+DRb.thread.join
+
+
