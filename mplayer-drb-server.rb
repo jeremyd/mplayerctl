@@ -45,10 +45,12 @@ class MPlayer
   LIVE      = 4
   RESUME    = 5
   RECOVERY = 6
+  
+  attr_accessor :playlist, :status
 
   def initialize(mplayercmd, addopts = "")
+    @status = MPlayer::READY
     @mplayerpath = mplayercmd
-    @status = MPlayer::INACTIVE
     @addopts = addopts
     @type = 'unknown'
     @bitrate = 'unknown'
@@ -59,29 +61,13 @@ class MPlayer
     @curfilesize = 0
     @livedelay = 5
     @crashcount = 1
+    @playlist = []
   end
 
   def load(video)
     stop if @status == PLAY || @status == PAUSED
     @playlistfile = video
     @status = MPlayer::READY
-    @mplayeropts = @addopts
-    @extname = File.extname(@playlistfile)
-    if video =~ /-([0-9]+?)-recovery/
-      @crashcount = $1.to_i + 1
-      @basename = video.gsub(/-[0-9]+?-recovery#{File.extname(@playlistfile)}/,"")
-    else               
-      @basename = video.gsub(/#{@extname}/,"")
-      @crashcount = 1
-    end
-  end
-
-  def resumelive
-    puts "resuming Live TV"
-    @status = LIVE
-    @curfilesize = File.size(@playlistfile)
-    sleep(@livedelay)
-    play
   end
 
   def play
@@ -95,20 +81,21 @@ class MPlayer
       @artist = 'unknown'
       @album = 'unknown'
       @channel = 'unknown'
+      if !@playlist.empty?
+        File.open("/tmp/playlistfile", "w") do |f|
+          f.write @playlist.join("\n") 
+        end
+        @playlist = []
+        @playthisnow = "-playlist /tmp/playlistfile"
+      else
+        @playthisnow = "'#{@playlistfile}'"
+      end
       @child = fork {
         @send.close
         @receive.close
         STDIN.reopen( receive)
         STDOUT.reopen( send)
-
-        case @status
-        when LIVE
-          cmdstr = "#{@mplayerpath} #{@mplayeropts} -sb #{@curfilesize} #{@playlistfile}"
-        when RECOVERY
-          cmdstr = "#{@mplayerpath} #{@mplayeropts} #{@playlistfile}"
-        else
-          cmdstr = "#{@mplayerpath} #{@mplayeropts} #{@playlistfile}"
-        end
+        cmdstr = "#{@mplayerpath} #{@addopts} #{@playthisnow}"
         exec cmdstr
       }
       send.close
@@ -166,7 +153,7 @@ class MPlayer
     @send.write("volume #{vol}\n")
   end
 
-  def playlist( step)
+  def pt_step( step)
     if @status == PLAY || @status == PAUSED
       str = "pt_step #{step}\n"
       @send.write(str)
@@ -177,11 +164,16 @@ class MPlayer
   end
 
   def playlist_next
-    playlist(1)
+    pt_step(1)
   end
 
   def playlist_prev
-    playlist(-1)
+    pt_step(-1)
+  end
+
+  # String p = The name of the media to enqueue
+  def enqueue(p)
+    @playlist << p
   end
 
   def seek( step)
@@ -237,14 +229,7 @@ class MPlayer
           #print "channel: #{@channel}, bitrate: #{@bitrate}\n"
         when /^Exiting\.\.\. \(End of file\)/
           print "Mplayer Thread Exited. EOF\n"
-          puts "#{@basename}-#{@crashcount}-recovery#{@extname}"
-          if is_currently_recording 
-            @status = MPlayer::LIVE
-          elsif File.exists?("#{@basename}-#{@crashcount}-recovery#{@extname}")
-            @status = MPlayer::RECOVERY
-          else
-            @status = MPlayer::READY
-          end
+          @status = MPlayer::READY
           stop_inspector
           @send.close
           @receive.close
@@ -260,30 +245,10 @@ class MPlayer
     }
   end
 
-  def recover
-    if @status == MPlayer::RECOVERY
-      puts "recovering from crash.. #{@basename}-#{@crashcount}-recovery.#{@extname}\n\n"
-      @playlistfile = "#{@basename}-#{@crashcount}-recovery#{@extname}"
-      @crashcount = @crashcount +1
-      play
-    end
-  end
-
   def stop_inspector
     @polling_thread.exit if !@polling_thread.nil? && @polling_thread.alive?
   end
 
-  def is_currently_recording
-    @test_size = File.size(@playlistfile)
-    sleep(1)
-    @new_size = File.size(@playlistfile)
-    if @new_size == @test_size
-      return false
-    else
-      return true
-    end
-  end
-  
 end
 
 # MAIN
@@ -329,13 +294,10 @@ puts "Listening on #{DRb.uri}"
 ##
 ## Example: Simple loop to perform custom actions on status. 
 
-#while @status != MPlayer::READY
-#  @status = mplayerpersistant.get_status
-#  sleep 1
-#  mplayerpersistant.resumelive if @status == MPlayer::LIVE
-#  mplayerpersistant.recover if @status == MPlayer::RECOVERY
-#end
+while 1
+  @status = mplayerpersistant.get_status
+  sleep 1
+  mplayerpersistant.play if @status == MPlayer::READY && !mplayerpersistant.playlist.empty?
+end
 
-DRb.thread.join
-
-
+#DRb.thread.join
